@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">MalO</string>
+    <string name="audio_attribution_label">Audio playback for MalO entity communication</string>
+</resources>

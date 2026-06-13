@@ -1,0 +1,8 @@
+{
+  "name": "Remix: MalO",
+  "description": "Friendly and slightly obsessive SCP-1471 companion app",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

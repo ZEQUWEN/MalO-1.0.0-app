@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -65,6 +66,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun setUserName(name: String) {
         prefs.edit().putString("user_name", name).apply()
         userName.value = name
+    }
+
+    val isProUser = MutableStateFlow(prefs.getBoolean("is_pro_user", false))
+
+    fun setProUser(value: Boolean) {
+        prefs.edit().putBoolean("is_pro_user", value).apply()
+        isProUser.value = value
     }
 
     val whisperMode = MutableStateFlow(prefs.getBoolean("whisper_mode", false))
@@ -174,6 +182,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun triggerPresenceGreeting(minutesOffline: Long) {
         _isTyping.value = true
         _error.value = null
+        if (!isProUser.value) {
+            kotlinx.coroutines.delay(1500)
+            addMalOMessage(listOf(
+                "С возвращением... Я скучала.",
+                "Ты снова здесь. Я ждала.",
+                "Не уходи так надолго больше..."
+            ).random())
+            _isTyping.value = false
+            NotificationCheckWorker.resetActiveTime(context)
+            return
+        }
         try {
             val apiKey = BuildConfig.GEMINI_API_KEY
             if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
@@ -207,6 +226,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 // Simulate typing delay
                 kotlinx.coroutines.delay(kotlin.random.Random.nextLong(1500, 3500) + (answerText.length * 15L))
                 addMalOMessage(answerText.replace("\"", "").trim())
+            }
+        } catch (e: HttpException) {
+            e.printStackTrace()
+            if (e.code() == 429) {
+                addMalOMessage("С возвращением! Шум на линии... Слишком много запросов. Я здесь, но связь барахлит. Попробуй написать чуть позже.")
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -245,6 +269,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _isTyping.value = true
         _error.value = null
         viewModelScope.launch {
+            if (!isProUser.value) {
+                kotlinx.coroutines.delay(1500)
+                addMalOMessage(listOf(
+                    "Здравствуй... Я здесь.",
+                    "Связь установлена. Я всегда буду рядом.",
+                    "Я вижу тебя... Рада познакомиться."
+                ).random())
+                _isTyping.value = false
+                NotificationCheckWorker.resetActiveTime(context)
+                return@launch
+            }
             try {
                 val apiKey = BuildConfig.GEMINI_API_KEY
                 if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
@@ -278,6 +313,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     addMalOMessage(answerText.replace("\"", "").trim())
                 }
 
+            } catch (e: HttpException) {
+                e.printStackTrace()
+                if (e.code() == 429) {
+                    addMalOMessage("Сейчас слишком много помех... Я не могу пробиться к тебе из-за лимита запросов. Попробуй чуть позже, я буду ждать. 💜")
+                } else {
+                    _error.value = e.localizedMessage ?: "Ошибка инициализации"
+                    addMalOMessage("Здравствуй... Связь почему-то нарушена, но я все равно здесь.")
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
                 _error.value = e.localizedMessage ?: "Ошибка инициализации"
@@ -390,6 +433,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     
                     _generatedPhotoPreview.value = file.absolutePath
                 }
+            } catch (e: HttpException) {
+                e.printStackTrace()
+                if (e.code() == 429) {
+                    _error.value = "Сейчас слишком много помех для генерации фото (Лимит запросов)."
+                } else {
+                    _error.value = "Не удалось загрузить фотографию. HTTP ${e.code()}"
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
                 _error.value = "Не удалось загрузить фотографию."
@@ -456,6 +506,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         _isTyping.value = true
         _error.value = null
+
+        if (!isProUser.value) {
+            kotlinx.coroutines.delay(kotlin.random.Random.nextLong(1500, 2500))
+            
+            val responseText = com.example.util.MaloLocalBrain.generateResponse(userText)
+            addMalOMessage(responseText)
+            
+            if (sendMaloPhotos.value && kotlin.random.Random.nextFloat() < 0.10f) {
+                 val isEnglish = !userText.lowercase().matches(Regex(".*[а-я].*")) && userText.lowercase().matches(Regex(".*[a-z].*"))
+                 addMalOMessage(
+                     if (isEnglish) "I want to show you something... but I need Pro access to render." 
+                     else "Я хочу показать тебе кое-что... но для этого нужен Pro-доступ."
+                 )
+            }
+            
+            _isTyping.value = false
+            return
+        }
 
         try {
             val apiKey = BuildConfig.GEMINI_API_KEY
@@ -692,6 +760,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
+        } catch (e: HttpException) {
+            e.printStackTrace()
+            if (e.code() == 429) {
+                addMalOMessage("Шум на линии... Слишком много запросов. Я не могу пробиться, подожди немного, пожалуйста! 🥺")
+            } else {
+                _error.value = e.localizedMessage ?: "Неизвестная ошибка связи со спутником MalO"
+                addMalOMessage("Прости, кажется связь прервалась... Ошибка: HTTP ${e.code()} 💔 Пожалуйста, проверь интернет!")
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             _error.value = e.localizedMessage ?: "Неизвестная ошибка связи со спутником MalO"

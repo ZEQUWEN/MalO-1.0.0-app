@@ -89,6 +89,9 @@ fun ChatScreen(viewModel: ChatViewModel) {
     val errorMsg by viewModel.error.collectAsState()
     val quickReplies by viewModel.quickReplies.collectAsState()
     val generatedPhotoPreview by viewModel.generatedPhotoPreview.collectAsState()
+    val isProUser by viewModel.isProUser.collectAsState()
+
+    var showPaywall by remember { mutableStateOf(false) }
 
     // Preview Dialog
     if (generatedPhotoPreview != null) {
@@ -132,6 +135,18 @@ fun ChatScreen(viewModel: ChatViewModel) {
                 }
             }
         }
+    }
+
+    if (showPaywall) {
+        PaywallDialog(
+            onDismiss = { showPaywall = false },
+            onProPurchased = { 
+                viewModel.setProUser(true) 
+                Toast.makeText(context, "Подписка Pro активирована", Toast.LENGTH_SHORT).show()
+                // MalO reacts to pro subscription
+                viewModel.sendMessage("Я приобрел Pro-подписку.")
+            }
+        )
     }
 
     // UI only states
@@ -334,14 +349,31 @@ fun ChatScreen(viewModel: ChatViewModel) {
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "MalO 1.0.0",
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "MalO 1.0.0",
+                                    color = Color.White,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Surface(
+                                    color = if (isProUser) scpNeonPurple else Color.DarkGray,
+                                    shape = RoundedCornerShape(4.dp),
+                                    modifier = Modifier.clickable { showPaywall = true }
+                                ) {
+                                    Text(
+                                        text = if (isProUser) "PRO" else "BASE",
+                                        color = if (isProUser) Color.Black else Color.LightGray,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                             val maloMoodColor by viewModel.maloMoodColor.collectAsState()
                             val animatedMoodColor by animateColorAsState(
                                 targetValue = maloMoodColor,
@@ -910,7 +942,13 @@ fun ChatScreen(viewModel: ChatViewModel) {
 
                     // Floating Button to generate new image
                     FloatingActionButton(
-                        onClick = { if (!isTyping) viewModel.generateMaloPhoto() },
+                        onClick = { 
+                            if (!isProUser) {
+                                showPaywall = true
+                            } else if (!isTyping) {
+                                viewModel.generateMaloPhoto() 
+                            }
+                        },
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(16.dp)
@@ -1295,7 +1333,13 @@ fun ChatScreen(viewModel: ChatViewModel) {
                                 // Scrape Attachment icon
                                 Box {
                                     IconButton(
-                                        onClick = { showAttachmentMenu = !showAttachmentMenu },
+                                        onClick = {
+                                            if (!isProUser) {
+                                                showPaywall = true
+                                            } else {
+                                                showAttachmentMenu = !showAttachmentMenu 
+                                            }
+                                        },
                                         modifier = Modifier.testTag("attachment_button")
                                     ) {
                                         Icon(
@@ -1390,7 +1434,9 @@ fun ChatScreen(viewModel: ChatViewModel) {
                                     // Voice Recording Button
                                     IconButton(
                                         onClick = {
-                                            if (isListening) {
+                                            if (!isProUser) {
+                                                showPaywall = true
+                                            } else if (isListening) {
                                                 viewModel.stopVoiceRecording()
                                             } else {
                                                 viewModel.startVoiceRecording()
